@@ -1,12 +1,97 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <title>UnoPharm LLC</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UnoPharm</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;max-width:1000px;margin:0 auto;padding:24px;line-height:1.5}
+    header{padding:16px 0;border-bottom:1px solid #eee;margin-bottom:20px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px}
+    small{color:#6b7280}
+  </style>
 </head>
 <body>
-  <h1>UnoPharm LLC</h1>
-  <p>Адрес: Душанбе, Таджикистан</p>
-  <p>Контакты: hibragimov0618@gmail.com</p>
-  <p></p>
+  <header>
+    <h1 id="hero_title">UnoPharm</h1>
+    <p id="hero_subtitle">Loading…</p>
+    <p><b>Phone:</b> <span id="phone"></span> • <b>Address:</b> <span id="address"></span></p>
+  </header>
+
+  <section class="card">
+    <h2>Announcements</h2>
+    <div id="announcements">Loading…</div>
+  </section>
+
+  <h2 style="margin-top:24px;">Products</h2>
+  <div class="grid" id="products">Loading…</div>
+
+<script>
+/* 1) PUT YOUR PUBLISHED CSV LINKS HERE */
+const CSV_SITE = "PASTE_SITE_TAB_CSV_LINK";
+const CSV_ANN  = "PASTE_ANNOUNCEMENTS_TAB_CSV_LINK";
+const CSV_PROD = "PASTE_PRODUCTS_TAB_CSV_LINK";
+
+/* Small CSV parser (no external libs) */
+function parseCSV(text){
+  const rows=[], re=/("([^"]|"")*"|[^,\n\r]*)(,|\r?\n|\r|$)/g;
+  let row=[], m, i=0;
+  text = text.replace(/\r\n/g,"\n");
+  while((m=re.exec(text))!==null){
+    let cell=m[1]||"";
+    if(cell.startsWith('"') && cell.endsWith('"')) cell=cell.slice(1,-1).replace(/""/g,'"');
+    row.push(cell);
+    if(m[3] === "," ) continue;
+    rows.push(row); row=[];
+    if(m.index === text.length-1) break;
+    if(++i>1e6) break; // safety
+  }
+  return rows.filter(r=>r.length && r.join("").trim()!=="");
+}
+async function getRows(url){
+  const res = await fetch(url + (url.includes("?")?"&":"?") + "_cb=" + Date.now()); // cache-bust
+  if(!res.ok) throw new Error("Fetch failed: "+url);
+  const text = await res.text();
+  const [header,...data] = parseCSV(text);
+  return data.map(r => Object.fromEntries(header.map((h,idx)=>[h.trim(), (r[idx]||"").trim()])));
+}
+function setSite(kv){
+  const byKey = Object.fromEntries(kv.map(r => [r.key, r.value]));
+  document.title = byKey.title || "UnoPharm";
+  (id => id && (document.getElementById("hero_title").textContent = id))(byKey.hero_title);
+  (id => id && (document.getElementById("hero_subtitle").textContent = id))(byKey.hero_subtitle);
+  (id => id && (document.getElementById("phone").textContent = id))(byKey.phone);
+  (id => id && (document.getElementById("address").textContent = id))(byKey.address);
+}
+function renderAnnouncements(rows){
+  const box = document.getElementById("announcements");
+  if(!rows.length){ box.textContent = "No announcements."; return; }
+  box.innerHTML = rows.map(r=>`<p><b>${r.date || ""}</b> — ${r.text || ""}</p>`).join("");
+}
+function renderProducts(rows){
+  const box = document.getElementById("products");
+  if(!rows.length){ box.textContent = "No products."; return; }
+  box.innerHTML = rows.map(r=>`
+    <div class="card">
+      <h3 style="margin:0 0 6px 0;">${r.name||"Unnamed"}</h3>
+      <p style="margin:0;"><b>Price:</b> ${r.price||"N/A"}</p>
+      <small>SKU: ${r.sku||"—"}</small>
+    </div>`).join("");
+}
+async function loadAll(){
+  try{
+    const [site, ann, prod] = await Promise.all([getRows(CSV_SITE), getRows(CSV_ANN), getRows(CSV_PROD)]);
+    setSite(site); renderAnnouncements(ann); renderProducts(prod);
+  }catch(e){
+    console.error(e);
+    document.getElementById("announcements").textContent = "Failed to load data.";
+    document.getElementById("products").textContent = "Failed to load data.";
+  }
+}
+loadAll();
+/* Optional: auto-refresh content every 10 minutes */
+setInterval(loadAll, 10*60*1000);
+</script>
 </body>
 </html>
